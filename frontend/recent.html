@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CNC Dashboard - Recent Runs</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <h1>CNC Dashboard</h1>
+
+  <div class="nav">
+    <a href="index.html">🏠 Live Machines</a>
+    <a href="parts.html">⚙️ Parts Generated</a>
+  </div>
+
+  <!-- ====== RECENT SPINDLE RUNS SECTION ====== -->
+  <div class="card large-card" id="recentSection">
+    <h2>Recent Spindle Runs</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Start</th>
+          <th>End</th>
+          <th>Duration</th>
+        </tr>
+      </thead>
+      <tbody id="recentTable"></tbody>
+    </table>
+  </div>
+
+  <!-- Placeholder error div -->
+  <div id="error"></div>
+
+  <!-- ====== SCRIPT ====== -->
+  <script src="script.js"></script>
+</body>
+</html>

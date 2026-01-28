@@ -1,0 +1,137 @@
+#include <WiFiS3.h>
+#include <Arduino.h>
+
+// ======================
+// WiFi Configuration
+// ======================
+const char* ssid = "JIO Office";
+const char* password = "12345678@";
+
+const char* server = "192.168.31.142";
+const int port = 3000;
+const char* deviceName = "arduino-1";
+
+IPAddress localIP(192, 168, 31, 50);
+IPAddress gateway(192, 168, 31, 1);
+IPAddress subnet(255, 255, 255, 0);
+
+WiFiClient client;
+
+// ======================
+// Pins
+// ======================
+const int PIN2 = 2;
+const int PIN3 = 3;
+const int PIN4 = 4;
+
+// ======================
+// Timing
+// ======================
+const unsigned long ON_CONFIRM_TIME = 250;
+const unsigned long LOOP_DELAY = 5;
+
+// ======================
+// Debounce State
+// ======================
+struct DebouncedPin {
+  int stableState;
+  unsigned long highStart;
+};
+
+DebouncedPin p2 = {LOW, 0};
+DebouncedPin p3 = {LOW, 0};
+DebouncedPin p4 = {LOW, 0};
+
+// ======================
+// WiFi
+// ======================
+void connectWiFi() {
+  WiFi.config(localIP, gateway, subnet);
+  WiFi.begin(ssid, password);
+
+  Serial.print("🔌 Connecting WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(300);
+    Serial.print(".");
+  }
+
+  Serial.println("\n✅ WiFi connected");
+  Serial.print("📡 Arduino IP: ");
+  Serial.println(WiFi.localIP());
+}
+
+// ======================
+// PLC-STYLE DEBOUNCE
+// ======================
+int readDebounced(int pin, DebouncedPin &dp) {
+  int raw = digitalRead(pin);
+  unsigned long now = millis();
+
+  if (raw == LOW) {
+    dp.stableState = LOW;
+    dp.highStart = 0;
+    return LOW;
+  }
+
+  if (dp.highStart == 0) dp.highStart = now;
+
+  if (now - dp.highStart >= ON_CONFIRM_TIME) {
+    dp.stableState = HIGH;
+  }
+
+  return dp.stableState;
+}
+
+// ======================
+// Send Update
+// ======================
+void sendUpdate(int a, int b, int c) {
+  Serial.print("Trying to connect to server ");
+  Serial.print(server);
+  Serial.print(":");
+  Serial.println(port);
+
+  if (!client.connect(server, port)) {
+    Serial.println("❌ SERVER CONNECT FAILED");
+    return;
+  }
+
+  Serial.println("✅ SERVER CONNECTED");
+  // ... rest of code
+}
+
+
+// ======================
+// Setup
+// ======================
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(PIN2, INPUT);
+  pinMode(PIN3, INPUT);
+  pinMode(PIN4, INPUT);
+
+  connectWiFi();
+  Serial.println("🚀 Stable Monitor Ready");
+}
+
+// ======================
+// Loop
+// ======================
+void loop() {
+  static int last2 = LOW, last3 = LOW, last4 = LOW;
+
+  int r2 = readDebounced(PIN2, p2);
+  int r3 = readDebounced(PIN3, p3);
+  int r4 = readDebounced(PIN4, p4);
+
+  if (r2 != last2 || r3 != last3 || r4 != last4) {
+    sendUpdate(r2, r3, r4);
+  }
+
+  last2 = r2;
+  last3 = r3;
+  last4 = r4;
+
+  delay(LOOP_DELAY);
+}

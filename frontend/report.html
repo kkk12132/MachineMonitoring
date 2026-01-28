@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CNC Dashboard — Reports</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --blue: #3b82f6;
+      --muted: #888;
+      --card: #1a1a1a;
+      --bg: #0a0a0a;
+      --success: #10b981;
+      --danger: #ef4444;
+      --border: #2a2a2a;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 28px auto;
+      padding: 18px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 2rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      margin-top: 18px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    label {
+      font-size: 13px;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+    }
+
+    input[type="date"],
+    input[type="time"],
+    input[type="text"] {
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #151515;
+      min-width: 160px;
+      color: #e0e0e0;
+    }
+
+    input[type="date"]:focus,
+    input[type="time"]:focus,
+    input[type="text"]:focus {
+      outline: none;
+      border-color: var(--blue);
+    }
+
+    button {
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    button:hover {
+      background: #2563eb;
+    }
+
+    button.secondary {
+      background: var(--card);
+      color: #e0e0e0;
+      border: 1px solid var(--border);
+    }
+
+    button.secondary:hover {
+      background: #2a2a2a;
+      border-color: #3a3a3a;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .meta {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      margin-top: 14px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+
+    th {
+      background: #151515;
+      color: #fff;
+      font-weight: 700;
+    }
+
+    td {
+      color: #b0b0b0;
+    }
+
+    tr:hover td {
+      background: #202020;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .right {
+      text-align: right;
+    }
+
+    .highlight {
+      font-weight: 700;
+      color: var(--blue);
+    }
+
+    .small {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .row-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .export-btn {
+      background: var(--success);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .export-btn:hover:not(:disabled) {
+      background: #059669;
+    }
+
+    .error {
+      color: var(--danger);
+      margin-top: 10px;
+      font-weight: 600;
+      padding: 12px;
+      background: rgba(239, 68, 68, 0.1);
+      border-radius: 8px;
+    }
+
+    @media (max-width: 768px) {
+      h1 {
+        font-size: 1.5rem;
+      }
+
+      .card {
+        padding: 16px;
+      }
+
+      .header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Report — Machine Progress</h1>
+      <div>
+        <button id="backBtn" class="secondary">← Back</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div class="controls">
+          <div class="field">
+            <label>From Date</label>
+            <input id="fromDate" type="date" />
+          </div>
+          <div class="field">
+            <label>From Time</label>
+            <input id="fromTime" type="time" step="1" />
+          </div>
+          <div class="field">
+            <label>To Date</label>
+            <input id="toDate" type="date" />
+          </div>
+          <div class="field">
+            <label>To Time</label>
+            <input id="toTime" type="time" step="1" />
+          </div>
+          <div style="align-self:end">
+            <button id="generateBtn">Generate Report</button>
+          </div>
+        </div>
+
+        <div style="min-width:220px; text-align:right">
+          <div class="small">Total Range</div>
+          <div id="rangeInfo" class="highlight">—</div>
+          <div class="meta small">You can export the table to CSV after generation.</div>
+        </div>
+      </div>
+
+      <div id="error" class="error" style="display:none"></div>
+
+      <div class="table-wrap card" style="margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="small">Results</div>
+          <div class="row-actions">
+            <button id="exportCsv" class="export-btn" disabled>Export CSV</button>
+          </div>
+        </div>
+
+        <table id="reportTable" aria-live="polite">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th class="right">Total ON (s)</th>
+              <th class="right">Total Range</th>
+              <th class="right">Efficiency %</th>
+            </tr>
+          </thead>
+          <tbody id="reportBody">
+            <tr>
+              <td colspan="4" class="small">Generate a report to show results.</td>
+            </tr>
+          </tbody>
+
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="report_script.js"></script>
+</body>
+
+</html>

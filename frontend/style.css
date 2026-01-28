@@ -1,0 +1,164 @@
+/* ============ GENERAL ============ */
+body {
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  background-color: #eef1f5;
+  margin: 0;
+  padding: 30px;
+  color: #2e2e2e;
+}
+
+h1 {
+  text-align: center;
+  color: #1b1b1b;
+  margin-bottom: 40px;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+/* ============ CARD CONTAINERS ============ */
+.card {
+  background-color: #ffffff;
+  border: 1px solid #d9dee3;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  margin: 20px auto;
+  padding: 25px;
+  transition: box-shadow 0.3s ease;
+}
+
+.card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.small-card {
+  max-width: 500px;
+}
+
+.large-card {
+  max-width: 900px;
+}
+
+/* ============ HEADINGS ============ */
+h2 {
+  color: #0a5eb7;
+  margin-bottom: 20px;
+  font-size: 20px;
+  font-weight: 600;
+  border-bottom: 2px solid #0a5eb7;
+  padding-bottom: 6px;
+}
+
+/* ============ TABLES ============ */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+table th, table td {
+  padding: 10px 12px;
+  text-align: center;
+  border-bottom: 1px solid #e1e5eb;
+}
+
+table th {
+  background-color: #f5f7fa;
+  color: #333;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+}
+
+table tr:hover {
+  background-color: #f9fbfd;
+}
+
+table td {
+  color: #222;
+}
+
+/* ============ STATUS COLORS ============ */
+td.status-on {
+  color: #22a745;
+  font-weight: 600;
+}
+
+td.status-off {
+  color: #d93025;
+  font-weight: 600;
+}
+
+/* ============ NAVIGATION LINKS ============ */
+.link-card {
+  text-align: center;
+  margin-top: 30px;
+}
+
+.link-card a {
+  text-decoration: none;
+  background: #0a5eb7;
+  color: #ffffff;
+  padding: 10px 25px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(10, 94, 183, 0.3);
+}
+
+.link-card a:hover {
+  background: #084d99;
+  box-shadow: 0 4px 8px rgba(10, 94, 183, 0.4);
+}
+
+/* ============ ERROR MESSAGE ============ */
+#error {
+  color: #c62828;
+  text-align: center;
+  margin-top: 15px;
+  font-weight: 500;
+  background: #ffebee;
+  border: 1px solid #ffcdd2;
+  padding: 10px;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 768px) {
+  body {
+    padding: 15px;
+  }
+
+  .card {
+    padding: 15px;
+  }
+
+  table th, table td {
+    font-size: 13px;
+    padding: 8px;
+  }
+
+  h1 {
+    font-size: 22px;
+  }
+}
+.nav {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.nav a {
+  display: inline-block;
+  margin: 0 10px;
+  padding: 8px 15px;
+  background: #007bff;
+  color: white;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background 0.3s;
+}
+
+.nav a:hover {
+  background: #0056b3;
+}

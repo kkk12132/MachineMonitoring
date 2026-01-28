@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CNC Dashboard - Parts Generated</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    h1 {
+      color: #fff;
+      margin-bottom: 24px;
+      font-size: 2rem;
+      font-weight: 700;
+    }
+
+    .nav {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .nav a {
+      background: #1a1a1a;
+      padding: 10px 20px;
+      border-radius: 8px;
+      text-decoration: none;
+      color: #e0e0e0;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      border: 1px solid #2a2a2a;
+    }
+
+    .nav a:hover {
+      background: #2a2a2a;
+      border-color: #3a3a3a;
+    }
+
+    .card {
+      background: #1a1a1a;
+      padding: 24px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      border: 1px solid #2a2a2a;
+    }
+
+    .card h2 {
+      margin-bottom: 16px;
+      color: #fff;
+      font-size: 1.5rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    #lastUpdated {
+      font-size: 14px;
+      color: #888;
+      font-weight: 400;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+
+    th {
+      padding: 12px;
+      border-bottom: 2px solid #2a2a2a;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      background: #151515;
+    }
+
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #2a2a2a;
+      font-size: 14px;
+      color: #b0b0b0;
+      text-align: center;
+    }
+
+    tr:hover {
+      background: #202020;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    #error {
+      color: #ef4444;
+      font-weight: 600;
+      margin-top: 12px;
+      padding: 12px;
+      background: rgba(239, 68, 68, 0.1);
+      border-radius: 8px;
+      text-align: center;
+      display: none;
+    }
+
+    #error:not(:empty) {
+      display: block;
+    }
+
+    @media (max-width: 768px) {
+      h1 {
+        font-size: 1.5rem;
+      }
+
+      .card {
+        padding: 16px;
+      }
+
+      table {
+        font-size: 12px;
+      }
+
+      th, td {
+        padding: 8px 6px;
+      }
+
+      .card h2 {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <h1>⚙️ CNC Dashboard</h1>
+
+  <div class="nav">
+    <a href="index.html">🏠 Live Machines</a>
+    <a href="recent.html">📜 Recent Runs</a>
+    <a href="parts.html">🧩 Parts Generated</a>
+  </div>
+
+  <!-- ====== PARTS GENERATED SECTION ====== -->
+  <div class="card large-card" id="partsSection">
+    <h2>
+      Parts Generated
+      <span id="lastUpdated">Refreshing...</span>
+    </h2>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Device</th>
+          <th>Start Time</th>
+          <th>End Time</th>
+          <th>Duration</th>
+        </tr>
+      </thead>
+      <tbody id="partsTable"></tbody>
+    </table>
+  </div>
+
+  <!-- Placeholder error div -->
+  <div id="error"></div>
+
+  <!-- ====== SCRIPT ====== -->
+  <script>
+    const serverUrl = "http://192.168.31.140:3000/devices";
+
+    async function fetchParts() {
+      try {
+        const res = await fetch(serverUrl);
+        if (!res.ok) throw new Error("Server not reachable");
+        const data = await res.json();
+
+        renderParts(data);
+        document.getElementById("error").innerText = "";
+        document.getElementById("lastUpdated").innerText =
+          "Last updated: " + new Date().toLocaleTimeString();
+      } catch (err) {
+        console.error(err);
+        document.getElementById("error").innerText = "❌ Cannot reach server";
+        document.getElementById("lastUpdated").innerText = "Offline";
+      }
+    }
+
+    function renderParts(devices) {
+      const tbody = document.getElementById("partsTable");
+      tbody.innerHTML = "";
+
+      for (const [name, dev] of Object.entries(devices)) {
+        if (!dev.parts || dev.parts.length === 0) continue;
+
+        dev.parts.forEach((p, i) => {
+          const startStr = new Date(p.start).toLocaleTimeString();
+          const endStr = new Date(p.end).toLocaleTimeString();
+          const duration = formatTime(p.duration);
+
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${i + 1}</td>
+            <td>${name}</td>
+            <td>${startStr}</td>
+            <td>${endStr}</td>
+            <td>${duration}</td>
+          `;
+          tbody.appendChild(row);
+        });
+      }
+    }
+
+    function formatTime(seconds) {
+      if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;
+      const h = String(Math.floor(seconds / 3600)).padStart(2, "0");
+      const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
+      const s = String(Math.floor(seconds % 60)).padStart(2, "0");
+      return `${h}:${m}:${s}`;
+    }
+
+    setInterval(fetchParts, 5000);
+    fetchParts();
+  </script>
+</body>
+
+</html>

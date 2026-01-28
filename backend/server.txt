@@ -1,0 +1,360 @@
+// server.js
+// CNC Monitoring Server - Enhanced with better debouncing and validation
+const express = require("express");
+const cors = require("cors");
+
+const app = express();
+const port = 3000;
+
+app.use(cors());
+app.use(express.json());
+
+// ==========================
+// In-memory device store
+// ==========================
+let devices = {}; // populated by /update posts from Arduino
+
+const DEBOUNCE_MS = 500; // Increased debounce threshold to match Arduino
+const SHIFT_SECONDS = 12 * 3600; // 43200 seconds
+const MIN_VALID_DURATION = 1; // Minimum 1 second to count as valid event
+
+// --------------------------
+// Helpers
+// --------------------------
+function getShiftWindowMs(now = new Date()) {
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const date = now.getDate();
+
+  const s1Start = new Date(year, month, date, 8, 30, 0, 0);   // 08:30 today
+  const s1End = new Date(year, month, date, 20, 30, 0, 0);    // 20:30 today
+
+  if (now >= s1Start && now < s1End) {
+    return { shiftName: "Shift1", startMs: s1Start.getTime(), endMs: s1End.getTime() };
+  }
+
+  if (now < s1Start) {
+    const prevStart = new Date(year, month, date - 1, 20, 30, 0, 0);
+    return { shiftName: "Shift2", startMs: prevStart.getTime(), endMs: s1Start.getTime() };
+  } else {
+    const start = s1End;
+    const end = new Date(year, month, date + 1, 8, 30, 0, 0);
+    return { shiftName: "Shift2", startMs: start.getTime(), endMs: end.getTime() };
+  }
+}
+
+function overlapSeconds(aStartMs, aEndMs, bStartMs, bEndMs) {
+  const s = Math.max(aStartMs, bStartMs);
+  const e = Math.min(aEndMs, bEndMs);
+  if (e <= s) return 0;
+  return Math.floor((e - s) / 1000);
+}
+
+// --------------------------
+// POST /update  (Arduino -> server)
+// receives { name, pin2, pin3, pin4, onTime }
+// --------------------------
+app.post("/update", (req, res) => {
+  const { name, pin2, pin3, pin4, onTime } = req.body;
+  if (!name) return res.status(400).send("Missing device name");
+
+  const now = Date.now();
+
+  // Initialize device if new
+  if (!devices[name]) {
+    devices[name] = {
+      spindle: 0,
+      spindleStart: null,
+      spindleTime: 0,   // cumulative seconds across lifetime (not per-shift)
+      recent: [],       // array of { start: ms, end: ms, duration: sec }
+      parts: [],
+      onTime: 0,
+      lastPins: { pin2: 0, pin3: 0, pin4: 0 },
+      lastChange: { pin2: 0, pin3: 0, pin4: 0 },
+      lastValidChange: { pin2: 0, pin3: 0, pin4: 0 }, // Track last valid state change
+      waitingForPin4: false,
+      pin3Time: null,
+      pin4Time: null,
+    };
+    console.log(`[${name}] 🆕 New device initialized`);
+  }
+
+  const dev = devices[name];
+  const prev = dev.lastPins;
+
+  // Enhanced debouncing: check if change is too soon AND same as before
+  const timeSinceLastChange = {
+    pin2: now - dev.lastChange.pin2,
+    pin3: now - dev.lastChange.pin3,
+    pin4: now - dev.lastChange.pin4
+  };
+
+  // Ignore if all pins unchanged and within debounce window
+  if (pin2 === prev.pin2 && pin3 === prev.pin3 && pin4 === prev.pin4) {
+    const allTooSoon = 
+      timeSinceLastChange.pin2 < DEBOUNCE_MS &&
+      timeSinceLastChange.pin3 < DEBOUNCE_MS &&
+      timeSinceLastChange.pin4 < DEBOUNCE_MS;
+    
+    if (allTooSoon) {
+      return res.json({ success: true, skipped: "debounced - no change" });
+    }
+  }
+
+  // PIN2: spindle ON/OFF with validation
+  if (pin2 === 1 && prev.pin2 === 0) {
+    // Only accept if enough time since last change
+    if (now - dev.lastValidChange.pin2 >= DEBOUNCE_MS) {
+      dev.spindle = 1;
+      dev.spindleStart = now;
+      dev.lastValidChange.pin2 = now;
+      console.log(`[${name}] 🟢 Spindle ON`);
+    } else {
+      console.log(`[${name}] ⚠️ Spindle ON ignored (too soon: ${now - dev.lastValidChange.pin2}ms)`);
+    }
+  }
+
+  if (pin2 === 0 && prev.pin2 === 1 && dev.spindleStart) {
+    const duration = Math.floor((now - dev.spindleStart) / 1000);
+    
+    // Only count if duration is valid and enough time since last change
+    if (duration >= MIN_VALID_DURATION && now - dev.lastValidChange.pin2 >= DEBOUNCE_MS) {
+      dev.spindle = 0;
+      dev.recent.push({ start: dev.spindleStart, end: now, duration });
+      dev.spindleTime += duration;
+      dev.lastValidChange.pin2 = now;
+      console.log(`[${name}] 🔴 Spindle OFF (${duration}s) | Total: ${dev.spindleTime}s`);
+      dev.spindleStart = null;
+      
+      // Keep reasonable history
+      if (dev.recent.length > 1000) {
+        dev.recent = dev.recent.slice(-500); // Keep last 500
+      }
+    } else if (duration < MIN_VALID_DURATION) {
+      dev.spindle = 0;
+      dev.spindleStart = null;
+      console.log(`[${name}] ⚠️ Spindle cycle ignored (too short: ${duration}s)`);
+    } else {
+      console.log(`[${name}] ⚠️ Spindle OFF ignored (too soon: ${now - dev.lastValidChange.pin2}ms)`);
+    }
+  }
+
+  // Update onTime from Arduino (ms)
+  if (typeof onTime === "number" && onTime >= 0) {
+    dev.onTime = Math.floor(onTime / 1000); // Convert to seconds
+  }
+
+  // PIN3/PIN4 part detection with debouncing
+  if (prev.pin3 === 0 && pin3 === 1) {
+    if (now - dev.lastValidChange.pin3 >= DEBOUNCE_MS) {
+      dev.waitingForPin4 = true;
+      dev.pin3Time = now;
+      dev.lastValidChange.pin3 = now;
+      console.log(`[${name}] ⚙️ Part Start Signal`);
+    } else {
+      console.log(`[${name}] ⚠️ Pin3 start ignored (too soon)`);
+    }
+  }
+
+  if (dev.waitingForPin4 && prev.pin4 === 0 && pin4 === 1) {
+    if (now - dev.lastValidChange.pin4 >= DEBOUNCE_MS) {
+      dev.pin4Time = now;
+      dev.lastValidChange.pin4 = now;
+      console.log(`[${name}] 🟣 Part End Signal Detected`);
+    } else {
+      console.log(`[${name}] ⚠️ Pin4 detection ignored (too soon)`);
+    }
+  }
+
+  if (dev.waitingForPin4 && prev.pin4 === 1 && pin4 === 0) {
+    const start = dev.pin3Time || now;
+    const end = dev.pin4Time || now;
+    const duration = Math.max(0, Math.floor((end - start) / 1000));
+
+    if (duration >= MIN_VALID_DURATION && duration < 600) {
+      dev.parts.push({ start, end, duration });
+      console.log(`[${name}] ✅ Part Completed (${duration}s) | Total parts: ${dev.parts.length}`);
+      
+      // Keep reasonable history
+      if (dev.parts.length > 1000) {
+        dev.parts = dev.parts.slice(-500);
+      }
+    } else {
+      console.log(`[${name}] ⚠️ Part ignored (invalid duration: ${duration}s)`);
+    }
+
+    dev.waitingForPin4 = false;
+  }
+
+  // Save last states/time
+  dev.lastPins = { pin2, pin3, pin4 };
+  dev.lastChange = { pin2: now, pin3: now, pin4: now };
+
+  res.json({ success: true, device: name, timestamp: now });
+});
+
+// --------------------------
+// GET /devices  (Dashboard fetch)
+// returns per-device totalShiftOnSeconds & efficiencyPercent
+// --------------------------
+app.get("/devices", (req, res) => {
+  const now = Date.now();
+  const shift = getShiftWindowMs(new Date(now));
+  const response = {};
+
+  for (const [name, dev] of Object.entries(devices)) {
+    let totalShiftOnSec = 0;
+
+    if (Array.isArray(dev.recent)) {
+      for (const slot of dev.recent) {
+        const s = Number(slot.start);
+        const e = Number(slot.end);
+        if (!s || !e) continue;
+        totalShiftOnSec += overlapSeconds(s, e, shift.startMs, shift.endMs);
+      }
+    }
+
+    if (dev.spindle === 1 && dev.spindleStart) {
+      const runningStart = dev.spindleStart;
+      const runningEnd = now;
+      totalShiftOnSec += overlapSeconds(runningStart, runningEnd, shift.startMs, shift.endMs);
+    }
+
+    totalShiftOnSec = Math.max(0, Math.min(totalShiftOnSec, SHIFT_SECONDS));
+    const efficiencyPercent = +((totalShiftOnSec / SHIFT_SECONDS) * 100).toFixed(2);
+
+    response[name] = {
+      spindle: dev.spindle || 0,
+      spindleTime: dev.spindleTime || 0,
+      recent: dev.recent || [],
+      parts: dev.parts || [],
+      partCount: (dev.parts || []).length,
+      onTime: dev.onTime || 0,
+      totalShiftOnSeconds: totalShiftOnSec,
+      efficiencyPercent,
+      shiftName: shift.shiftName,
+      lastUpdate: dev.lastChange.pin2 || now
+    };
+  }
+
+  res.json(response);
+});
+
+// --------------------------
+// GET /report
+// params: from=<ISO|ms> , to=<ISO|ms>
+// returns per-device totalOnSeconds and efficiencyPercent for the requested range
+// --------------------------
+app.get("/report", (req, res) => {
+  const fromRaw = req.query.from;
+  const toRaw = req.query.to;
+
+  if (!fromRaw || !toRaw) {
+    return res.status(400).json({ 
+      error: "Missing required query parameters 'from' and 'to' (ISO or ms)",
+      example: "/report?from=2025-01-09T08:30:00&to=2025-01-09T20:30:00"
+    });
+  }
+
+  // Accept either numeric ms or ISO strings
+  const fromMs = isNaN(Number(fromRaw)) ? Date.parse(fromRaw) : Number(fromRaw);
+  const toMs = isNaN(Number(toRaw)) ? Date.parse(toRaw) : Number(toRaw);
+
+  if (Number.isNaN(fromMs) || Number.isNaN(toMs)) {
+    return res.status(400).json({ error: "Invalid 'from' or 'to' timestamp. Use ISO format or epoch ms." });
+  }
+  if (fromMs >= toMs) {
+    return res.status(400).json({ error: "'from' must be before 'to'." });
+  }
+
+  const totalRangeSec = Math.floor((toMs - fromMs) / 1000);
+  if (totalRangeSec <= 0) {
+    return res.status(400).json({ error: "Range must be > 0 seconds." });
+  }
+
+  const response = {
+    from: fromMs,
+    fromISO: new Date(fromMs).toISOString(),
+    to: toMs,
+    toISO: new Date(toMs).toISOString(),
+    totalRangeSec,
+    devices: {}
+  };
+
+  for (const [name, dev] of Object.entries(devices)) {
+    let totalOnSec = 0;
+    let validSlots = 0;
+
+    // count overlaps from dev.recent
+    if (Array.isArray(dev.recent)) {
+      for (const slot of dev.recent) {
+        const s = Number(slot.start);
+        const e = Number(slot.end);
+        if (!s || !e) continue;
+        const overlap = overlapSeconds(s, e, fromMs, toMs);
+        if (overlap > 0) {
+          totalOnSec += overlap;
+          validSlots++;
+        }
+      }
+    }
+
+    // include running portion if device currently running
+    if (dev.spindle === 1 && dev.spindleStart) {
+      const runningStart = dev.spindleStart;
+      const runningEnd = Date.now();
+      totalOnSec += overlapSeconds(runningStart, runningEnd, fromMs, toMs);
+    }
+
+    // clamp to requested range length
+    totalOnSec = Math.max(0, Math.min(totalOnSec, totalRangeSec));
+
+    const efficiencyPercent = +((totalOnSec / totalRangeSec) * 100).toFixed(2);
+
+    response.devices[name] = {
+      name,
+      totalOnSeconds: totalOnSec,
+      totalOnHours: +(totalOnSec / 3600).toFixed(2),
+      efficiencyPercent,
+      validSlots,
+      isCurrentlyRunning: dev.spindle === 1,
+      partCount: (dev.parts || []).length
+    };
+  }
+
+  res.json(response);
+});
+
+// --------------------------
+// GET /status (Health check)
+// --------------------------
+app.get("/status", (req, res) => {
+  const deviceCount = Object.keys(devices).length;
+  const shift = getShiftWindowMs();
+  
+  res.json({
+    status: "online",
+    uptime: process.uptime(),
+    deviceCount,
+    devices: Object.keys(devices),
+    currentShift: shift.shiftName,
+    shiftStart: new Date(shift.startMs).toISOString(),
+    shiftEnd: new Date(shift.endMs).toISOString(),
+    timestamp: Date.now()
+  });
+});
+
+// --------------------------
+// Start server
+// --------------------------
+app.listen(port, () => {
+  console.log(`✅ CNC Server running at http://localhost:${port}`);
+  console.log(`📊 GET /devices -> per-shift metrics`);
+  console.log(`📈 GET /report?from=<ISO_or_ms>&to=<ISO_or_ms> -> range report`);
+  console.log(`❤️  GET /status -> health check`);
+  console.log(`📝 POST /update -> receive Arduino data`);
+  console.log(`\n⚙️  Settings:`);
+  console.log(`   - Debounce: ${DEBOUNCE_MS}ms`);
+  console.log(`   - Min valid duration: ${MIN_VALID_DURATION}s`);
+  console.log(`   - Shift duration: ${SHIFT_SECONDS / 3600}h`);
+});
