@@ -1,5 +1,5 @@
 // report_script.js
-const serverUrl = "http://192.168.31.140:3000/devices";
+const serverUrl = "http://{"IPaddress"}:3000/devices";
 
 const fromDate = document.getElementById("fromDate");
 const fromTime = document.getElementById("fromTime");
