@@ -1,5 +1,5 @@
 // ====== CONFIG ======
-const serverUrl = "http://192.168.31.140:3000/devices";
+const serverUrl = "http://{"IPaddress"}:3000/devices";
 
 // ====== LOCAL STORAGE KEYS ======
 const STORAGE_KEY = "cnc_runtimeData";
