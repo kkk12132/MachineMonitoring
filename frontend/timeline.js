@@ -1,7 +1,7 @@
 // timeline.js
 // Timeline visualization for CNC machines
 
-const API_URL = "http://192.168.31.140:3000";
+const API_URL = "http://{"IPaddress"}:3000";
 const VERIFICATION_KEY = "cnc_timeline_verifications";
 
 let currentSegment = null;
