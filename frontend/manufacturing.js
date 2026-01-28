@@ -1,4 +1,4 @@
-const serverUrl = "http://192.168.31.140:3000/devices";
+const serverUrl = "http://{"IPaddres"}:3000/devices";
 
 // ====== FETCH MANUFACTURING STATUS ======
 async function fetchManufacturing() {
