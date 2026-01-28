@@ -366,6 +366,6 @@ app.delete("/reset", (req, res) => {
 // --------------------------
 app.listen(port, "0.0.0.0", () => {
   console.log("✅ CNC Server running");
-  console.log(`🌐 http://192.168.31.140:${port}`);
+  console.log(`🌐 http://{"IPaddress"}:${port}`);
   console.log(`🌐 Local: http://localhost:${port}`);
 });
