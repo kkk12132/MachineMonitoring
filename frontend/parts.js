@@ -1,4 +1,4 @@
-const serverUrl = "http://192.168.31.140:3000/devices";
+const serverUrl = "http://{"IPaddress"}:3000/devices";
 
 // ====== FETCH DEVICE DATA FROM SERVER ======
 async function fetchDevices() {
